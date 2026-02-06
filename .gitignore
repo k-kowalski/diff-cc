@@ -1,0 +1,21 @@
+# Python bytecode / cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Local runtime outputs
+out_verify/
+out_verify2/
+tmp_opt/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
