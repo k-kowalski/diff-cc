@@ -5,13 +5,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="Realtime differentiable Catmull-Clark storytelling demo (TFJS + Three.js)." />
-  <title>diff_cc demo - story mode</title>
+  <title>Differentiable Catmull-Clark</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
     href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Manrope:wght@400;500;600;700;800&display=swap"
     rel="stylesheet" />
-  <link rel="stylesheet" href="./css/site.css?v=story12" />
+  <link rel="stylesheet" href="./css/site.css?v=story14" />
   <script src="./js/vendor/tf.min.js?v=story6"></script>
   <script src="./js/vendor/chart.umd.min.js?v=story6"></script>
   <script type="importmap">
@@ -48,8 +48,7 @@
             <p class="kicker">Section 1</p>
             <h2>Symmetric cube to squished subdivided target</h2>
             <p class="muted">
-              We start with a perfect cube cage and optimize it to match a squished target surface. The target is
-              procedurally generated from a deformed cube and then subdivided.
+              We start with a perfect cube cage and optimize it to match a squished target surface.
             </p>
           </div>
           <div class="storyControls">
@@ -75,7 +74,7 @@
             </div>
           </div>
         </div>
-        <div class="storyViewerFull">
+        <div class="storyViewerFull viewerPending" id="sec1Viewer">
           <canvas id="sec1Canvas"></canvas>
         </div>
         <div class="storyChartFull">
@@ -129,7 +128,7 @@
           </div>
         </div>
 
-        <div class="storyViewerFull">
+        <div class="storyViewerFull viewerPending" id="sec2Viewer">
           <canvas id="sec2Canvas"></canvas>
         </div>
 
@@ -158,7 +157,7 @@
     </main>
   </div>
 
-  <script type="module" src="./js/demo_main.js?v=story13"></script>
+  <script type="module" src="./js/demo_main.js?v=story19"></script>
 </body>
 
 </html>

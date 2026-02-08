@@ -204,6 +204,10 @@ function yieldToUI(ms = 0) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function runWhenIdle(task, delay = 80) {
+  setTimeout(() => task().catch(handleError), Math.max(0, delay));
+}
+
 const LOAD_BUTTON_KEYS = [
   "prepareBtn",
   "runBtn",
@@ -222,7 +226,6 @@ const RUN_DISABLE_BUTTON_KEYS = [
   "runABtn",
   "prepareBBtn",
   "runBBtn",
-  "resetBtn",
 ];
 
 const PARAM_INPUT_KEYS = ["lr", "iters", "samples"];
@@ -241,37 +244,53 @@ function setParamInputsDisabled(section, disabled) {
   }
 }
 
-function setSectionLoading(section, isLoading, message = null) {
-  if (message) section.ui.state.textContent = message;
-  section.ui.state.classList.toggle("isLoading", isLoading);
-  if (isLoading) section.ui.state.classList.remove("isRunning");
+function setViewerPending(section, pending) {
+  const viewer = section.ui.viewer;
+  if (!viewer) return;
+  viewer.classList.toggle("viewerPending", pending);
+}
+
+function setSectionLoading(section, isLoading, message = null, stateEl = null) {
+  const el = stateEl || section.ui.stateA || section.ui.state;
+  if (el) {
+    if (message) el.textContent = message;
+    el.classList.toggle("isLoading", isLoading);
+    if (isLoading) el.classList.remove("isRunning");
+  }
   setButtonGroupDisabled(section, LOAD_BUTTON_KEYS, isLoading);
   setParamInputsDisabled(section, isLoading);
 }
 
-function setSectionRunning(section, isRunning, message = null) {
-  if (message) section.ui.state.textContent = message;
-  section.ui.state.classList.toggle("isRunning", isRunning);
-  if (isRunning) section.ui.state.classList.remove("isLoading");
+function setSectionRunning(section, isRunning, message = null, stateEl = null) {
+  const el = stateEl || section.ui.stateA || section.ui.state;
+  if (el) {
+    if (message) el.textContent = message;
+    el.classList.toggle("isRunning", isRunning);
+    if (isRunning) el.classList.remove("isLoading");
+  }
   setButtonGroupDisabled(section, RUN_DISABLE_BUTTON_KEYS, isRunning);
   setParamInputsDisabled(section, isRunning);
 }
 
 function clearSectionBusy(section) {
-  section.ui.state.classList.remove("isLoading");
-  section.ui.state.classList.remove("isRunning");
+  const stateEls = [section.ui.state, section.ui.stateA, section.ui.stateB].filter(Boolean);
+  for (const stateEl of stateEls) {
+    stateEl.classList.remove("isLoading");
+    stateEl.classList.remove("isRunning");
+  }
   setButtonGroupDisabled(section, LOAD_BUTTON_KEYS, false);
   setParamInputsDisabled(section, false);
 }
 
-function runSection(section, message, task) {
+function runSection(section, message, task, stateEl = null) {
   if (section.runPromise) return section.runPromise;
   section.runPromise = (async () => {
-    setSectionRunning(section, true, message);
+    setSectionRunning(section, true, message, stateEl);
     try {
+      await nextFrame();
       await task();
     } finally {
-      setSectionRunning(section, false);
+      setSectionRunning(section, false, null, stateEl);
       section.runPromise = null;
     }
   })();
@@ -631,6 +650,25 @@ class SectionRunner {
     });
   }
 
+  prewarmOptimizationGraph() {
+    const tf = ensureTFReady();
+    const ws = this.weights;
+    tf.tidy(() => {
+      const grads = tf.variableGrads(() => {
+        const subd = subdivideLevelsTF(this.cageVar, this.ccConns);
+        const srcSamp = this.sampleSpec.sample(subd);
+        const chamfer = chamferSymmetric(srcSamp, this.targetSamples);
+        const smooth = ws.smooth > 0 ? laplacianSmoothLoss(this.cageVar, this.cageAdj).mul(ws.smooth) : tf.scalar(0);
+        const edge = ws.edge > 0 ? edgeLengthLoss(this.cageVar, this.cageEdges).mul(ws.edge) : tf.scalar(0);
+        const anchor =
+          ws.anchor > 0 ? tf.mean(tf.sum(tf.square(this.cageVar.sub(this.cageInit)), 1)).mul(ws.anchor) : tf.scalar(0);
+        return chamfer.add(smooth).add(edge).add(anchor);
+      }, [this.cageVar]);
+      grads.value.dispose();
+      for (const grad of Object.values(grads.grads)) grad.dispose();
+    });
+  }
+
   async run(iterBudget) {
     if (!this.cageVar) return false;
     if (this.runPromise) return this.runPromise;
@@ -638,6 +676,7 @@ class SectionRunner {
     const activeRun = (async () => {
       this.running = true;
       this.setStatus("Running...");
+      await nextFrame();
       while (this.running && this.iter < iterBudget) {
         const stepsPerFrame = 1;
         for (let i = 0; i < stepsPerFrame && this.iter < iterBudget; i++) {
@@ -680,8 +719,12 @@ class SectionRunner {
     this.cageVar.assign(this.cageInit);
     this.iter = 0;
     this.clearChart();
-    const vals = this.evaluateLossAndUpdateVis();
-    this.chartPush(vals.total, vals.chamfer);
+    const cageArr = this.cageVar.dataSync();
+    updateEdgeLines(this.visCage.geom, this.visCage.edges, cageArr);
+    const subd = ensureTFReady().tidy(() => subdivideLevelsTF(this.cageVar, this.ccConns));
+    const subdVerts = subd.dataSync();
+    subd.dispose();
+    updateTriMeshGeometry(this.visSubd.geom, subdVerts);
     this.setStatus("Reset to initial cage.");
   }
 
@@ -704,14 +747,27 @@ class SectionRunner {
     this.targetObj = cloneMeshData(target);
     this.cageObj = cloneMeshData(cage);
 
+    this.setStatus(`Loading ${key}...`);
     this.rebuildTFGraph();
+    await yieldToUI();
     this.rebuildTargetVis();
     this.rebuildSubdVis();
     this.rebuildCageVis();
+    await yieldToUI();
+
+    const subdWarm = ensureTFReady().tidy(() => subdivideLevelsTF(this.cageVar, this.ccConns));
+    const subdVerts = subdWarm.dataSync();
+    subdWarm.dispose();
+    updateTriMeshGeometry(this.visSubd.geom, subdVerts);
+
+    const cageArr = this.cageVar.dataSync();
+    updateEdgeLines(this.visCage.geom, this.visCage.edges, cageArr);
     this.clearChart();
     this.fitCameraToScene();
-    const vals = this.evaluateLossAndUpdateVis();
-    this.chartPush(vals.total, vals.chamfer);
+    this.setStatus(`Compiling optimization graph for ${key}...`);
+    await yieldToUI();
+    this.prewarmOptimizationGraph();
+    await yieldToUI();
 
     const params = this.getParams();
     this.setPills([
@@ -728,6 +784,7 @@ const sec1 = {
   runner: null,
   runPromise: null,
   ui: {
+    viewer: $("sec1Viewer"),
     canvas: $("sec1Canvas"),
     chartCanvas: $("sec1Chart"),
     status: $opt("sec1Status"),
@@ -748,6 +805,7 @@ const sec2 = {
   stageAOptimized: null,
   runPromise: null,
   ui: {
+    viewer: $("sec2Viewer"),
     canvas: $("sec2Canvas"),
     chartCanvas: $("sec2Chart"),
     status: $opt("sec2Status"),
@@ -781,15 +839,17 @@ async function loadSec1Scenario() {
   if (sec1LoadPromise) return sec1LoadPromise;
 
   sec1LoadPromise = (async () => {
-    setSectionLoading(sec1, true, "Preparing section 1 (building target + subdivision)...");
+    setViewerPending(sec1, true);
+    setSectionLoading(sec1, true, "Preparing section 1 (building target + subdivision)...", sec1.ui.state);
     try {
       await yieldToUI(10); // Allow UI to update before heavy work
       const scenario = await getSection1Scenario();
       await yieldToUI(); // Yield after heavy computation
       await sec1.runner.loadScenario({ key: SEC1_SCENARIO_KEY, cage: scenario.cage, target: scenario.target });
+      setViewerPending(sec1, false);
       sec1.ui.state.textContent = "Section 1 prepared. Run optimization.";
     } finally {
-      setSectionLoading(sec1, false);
+      setSectionLoading(sec1, false, null, sec1.ui.state);
     }
   })();
 
@@ -806,16 +866,18 @@ async function loadSec2StageA() {
   if (sec2StageALoadPromise) return sec2StageALoadPromise;
 
   sec2StageALoadPromise = (async () => {
-    setSectionLoading(sec2, true, "Preparing stage A (loading target + cube1 cage)...");
+    setViewerPending(sec2, true);
+    setSectionLoading(sec2, true, "Preparing stage A (loading target + cube1 cage)...", sec2.ui.stateA);
     try {
       await yieldToUI(10); // Allow UI to update before heavy work
       const cage = await getCube1Mesh();
       const target = await fetchOBJCached("./assets/target1_subd2.obj");
       await yieldToUI(); // Yield after heavy computation
       await sec2.runner.loadScenario({ key: SEC2_STAGE_A_KEY, cage, target });
-      sec2.ui.state.textContent = "Stage A prepared. Run stage A first.";
+      setViewerPending(sec2, false);
+      setSec2StateA("Stage A prepared. Run stage A first.");
     } finally {
-      setSectionLoading(sec2, false);
+      setSectionLoading(sec2, false, null, sec2.ui.stateA);
     }
   })();
 
@@ -829,23 +891,26 @@ async function loadSec2StageA() {
 
 async function loadSec2StageB() {
   if (!sec2.stageAOptimized) {
-    sec2.ui.state.textContent = "Stage B unavailable. Run stage A first.";
+    setSec2StateB("Stage B unavailable. Run stage A first.");
     return;
   }
   if (sec2.runner.lastScenarioKey === SEC2_STAGE_B_KEY) return;
   if (sec2StageBLoadPromise) return sec2StageBLoadPromise;
 
   sec2StageBLoadPromise = (async () => {
-    setSectionLoading(sec2, true, "Preparing stage B (recovering level-0 cage target)...");
+    setViewerPending(sec2, true);
+    setSectionLoading(sec2, true, "Preparing stage B (recovering level-0 cage target)...", sec2.ui.stateB);
+    setSec2StateB("Preparing stage B (recovering level-0 cage target)...");
     try {
       await yieldToUI(10); // Allow UI to update before heavy work
       const cage = makeCube0Mesh();
       const target = cloneMeshData(sec2.stageAOptimized);
       sec2.runner.ui.lr.value = "0.006";
       await sec2.runner.loadScenario({ key: SEC2_STAGE_B_KEY, cage, target });
-      sec2.ui.state.textContent = "Stage B prepared. This should plateau above stage A.";
+      setViewerPending(sec2, false);
+      setSec2StateB("Stage B prepared. This should plateau above stage A.");
     } finally {
-      setSectionLoading(sec2, false);
+      setSectionLoading(sec2, false, null, sec2.ui.stateB);
     }
   })();
 
@@ -864,9 +929,15 @@ function bindEvents() {
   sec1.ui.runBtn.addEventListener("click", () =>
     runSection(sec1, "Running section 1 optimization...", async () => {
       if (sec1.runner.lastScenarioKey !== SEC1_SCENARIO_KEY) await loadSec1Scenario();
-      await sec1.runner.run(parseInt(sec1.ui.iters.value, 10) || 100);
-      sec1.ui.state.textContent = "Optimization complete. Reset to try again.";
-    }).catch(handleError),
+      const iterBudget = parseInt(sec1.ui.iters.value, 10) || 100;
+      if (sec1.runner.iter >= iterBudget) {
+        sec1.runner.reset();
+        sec1.ui.state.textContent = "Restarted from initial cage.";
+        await nextFrame();
+      }
+      await sec1.runner.run(iterBudget);
+      sec1.ui.state.textContent = "Optimization complete. Click Run to restart from initial cage.";
+    }, sec1.ui.state).catch(handleError),
   );
   sec1.ui.resetBtn.addEventListener("click", () => {
     sec1.runner.reset();
@@ -880,15 +951,22 @@ function bindEvents() {
   sec2.ui.runABtn.addEventListener("click", () =>
     runSection(sec2, "Running stage A optimization...", async () => {
       if (sec2.runner.lastScenarioKey !== SEC2_STAGE_A_KEY) await loadSec2StageA();
-      const completed = await sec2.runner.run(parseInt(sec2.ui.iters.value, 10) || 200);
+      const iterBudget = parseInt(sec2.ui.iters.value, 10) || 200;
+      if (sec2.runner.iter >= iterBudget) {
+        sec2.runner.reset();
+        lockStageB();
+        setSec2StateA("Restarted stage A from initial cage.");
+        await nextFrame();
+      }
+      const completed = await sec2.runner.run(iterBudget);
       if (completed) {
         sec2.stageAOptimized = sec2.runner.getCurrentCageWorld();
-        setSec2StateA("Stage A finished.");
+        setSec2StateA("Stage A finished. Click Run stage A to restart.");
         unlockStageB();
       } else {
         setSec2StateA("Stage A paused. Resume or reset.");
       }
-    }).catch(handleError),
+    }, sec2.ui.stateA).catch(handleError),
   );
 
   // Section 2 Stage B events
@@ -899,13 +977,19 @@ function bindEvents() {
     runSection(sec2, "Running stage B optimization...", async () => {
       if (sec2.runner.lastScenarioKey !== SEC2_STAGE_B_KEY) await loadSec2StageB();
       if (sec2.runner.lastScenarioKey !== SEC2_STAGE_B_KEY) return;
-      const completed = await sec2.runner.run(parseInt(sec2.ui.iters.value, 10) || 200);
+      const iterBudget = parseInt(sec2.ui.iters.value, 10) || 200;
+      if (sec2.runner.iter >= iterBudget) {
+        sec2.runner.reset();
+        setSec2StateB("Restarted stage B from initial cage.");
+        await nextFrame();
+      }
+      const completed = await sec2.runner.run(iterBudget);
       if (completed) {
-        setSec2StateB("Stage B finished. Compare the higher loss floor vs stage A.");
+        setSec2StateB("Stage B finished. Click Run stage B to restart.");
       } else {
         setSec2StateB("Stage B paused. Resume or reset.");
       }
-    }).catch(handleError),
+    }, sec2.ui.stateB).catch(handleError),
   );
 
   sec2.ui.stopBtn.addEventListener("click", () => {
@@ -915,13 +999,7 @@ function bindEvents() {
   sec2.ui.resetBtn.addEventListener("click", () => {
     sec2.runner.reset();
     setSec2StateA("Ready. Click Run stage A.");
-    // Lock stage B again
-    if (sec2.ui.stageBGroup) {
-      sec2.ui.stageBGroup.classList.remove("unlocked");
-    }
-    sec2.ui.runBBtn.disabled = true;
-    sec2.stageAOptimized = null;
-    setSec2StateB("Complete stage A first.");
+    lockStageB();
   });
 
   sec1.ui.stopBtn.addEventListener("click", () => {
@@ -974,48 +1052,27 @@ async function main() {
   sec2.runner.initChart();
 
   bindEvents();
+  setViewerPending(sec1, true);
+  setViewerPending(sec2, true);
 
-  // Set initial loading states
-  sec1.ui.state.textContent = "Loading assets...";
-  if (sec2.ui.stateA) sec2.ui.stateA.textContent = "Loading assets...";
+  // Background-preload geometry in idle time so viewers are populated without blocking initial paint.
+  sec1.ui.state.textContent = "Preparing geometry in background...";
+  if (sec2.ui.stateA) sec2.ui.stateA.textContent = "Preparing geometry in background...";
   if (sec2.ui.stateB) sec2.ui.stateB.textContent = "Complete stage A first.";
-  if (sec2.ui.state) sec2.ui.state.textContent = "Loading assets...";
-  sec1.runner.setStatus("Preloading...");
-  sec2.runner.setStatus("Preloading...");
+  if (sec2.ui.state) sec2.ui.state.textContent = "Preparing geometry in background...";
+  sec1.runner.setStatus("Idle.");
+  sec2.runner.setStatus("Idle.");
 
-  // Preload both sections in parallel (non-blocking)
-  await yieldToUI(10);
-
-  // Preload section 1
-  const sec1Preload = (async () => {
-    try {
-      await loadSec1Scenario();
-      sec1.ui.state.textContent = "Ready. Click Run optimization.";
-      sec1.runner.setStatus("Ready.");
-    } catch (err) {
-      console.error("Section 1 preload failed:", err);
-      sec1.ui.state.textContent = "Click Run to load and start.";
-      sec1.runner.setStatus("Idle.");
-    }
-  })();
-
-  // Preload section 2 stage A
-  const sec2Preload = (async () => {
-    try {
+  runWhenIdle(async () => {
+    await loadSec1Scenario();
+    sec1.ui.state.textContent = "Ready. Click Run optimization.";
+    sec1.runner.setStatus("Ready.");
+    runWhenIdle(async () => {
       await loadSec2StageA();
-      if (sec2.ui.stateA) sec2.ui.stateA.textContent = "Ready. Click Run stage A.";
-      if (sec2.ui.state) sec2.ui.state.textContent = "Ready. Click Run stage A.";
+      setSec2StateA("Ready. Click Run stage A.");
       sec2.runner.setStatus("Ready.");
-    } catch (err) {
-      console.error("Section 2 preload failed:", err);
-      if (sec2.ui.stateA) sec2.ui.stateA.textContent = "Click Run stage A to load and start.";
-      if (sec2.ui.state) sec2.ui.state.textContent = "Click Run stage A to load and start.";
-      sec2.runner.setStatus("Idle.");
-    }
-  })();
-
-  // Don't await - let them load in background
-  Promise.allSettled([sec1Preload, sec2Preload]);
+    }, 160);
+  }, 80);
 }
 
 // Helper to set state text on section 2 (handles both old and new UI)
@@ -1035,6 +1092,15 @@ function unlockStageB() {
   }
   sec2.ui.runBBtn.disabled = false;
   setSec2StateB("Ready. Click Run stage B.");
+}
+
+function lockStageB() {
+  if (sec2.ui.stageBGroup) {
+    sec2.ui.stageBGroup.classList.remove("unlocked");
+  }
+  sec2.ui.runBBtn.disabled = true;
+  sec2.stageAOptimized = null;
+  setSec2StateB("Complete stage A first.");
 }
 
 main().catch(handleError);

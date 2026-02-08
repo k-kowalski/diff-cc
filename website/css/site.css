@@ -728,6 +728,12 @@ code {
   background: rgba(255, 255, 255, 0.025);
 }
 
+#storySec1 .storyControls {
+  flex: 1 1 100%;
+  min-width: 0;
+  width: 100%;
+}
+
 .storyButtonRow {
   display: flex;
   flex-wrap: wrap;
@@ -777,6 +783,7 @@ code {
 
 .storyViewerFull {
   width: 100%;
+  position: relative;
 }
 
 .storyViewerFull canvas {
@@ -787,6 +794,27 @@ code {
   background:
     radial-gradient(70% 70% at 48% 42%, rgba(88, 132, 192, 0.18), rgba(13, 22, 33, 0.86)),
     rgba(13, 22, 33, 0.9);
+}
+
+.storyViewerFull.viewerPending canvas {
+  visibility: hidden;
+}
+
+.storyViewerFull.viewerPending::after {
+  content: "Preparing geometry...";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background:
+    radial-gradient(70% 70% at 48% 42%, rgba(88, 132, 192, 0.12), rgba(13, 22, 33, 0.9)),
+    rgba(13, 22, 33, 0.92);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
 }
 
 .storyChartFull {
