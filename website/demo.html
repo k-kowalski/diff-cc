@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Realtime differentiable Catmull-Clark storytelling demo (TFJS + Three.js)." />
+  <title>diff_cc demo - story mode</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Manrope:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="./css/site.css?v=story12" />
+  <script src="./js/vendor/tf.min.js?v=story6"></script>
+  <script src="./js/vendor/chart.umd.min.js?v=story6"></script>
+  <script type="importmap">
+      {
+        "imports": {
+          "three": "./js/vendor/three.module.js?v=story6"
+        }
+      }
+    </script>
+</head>
+
+<body class="demoBody">
+  <img src="./assets/triangles.svg" alt="" class="bg-triangles" aria-hidden="true" />
+  <div class="content-wrapper">
+    <header class="topbar">
+      <div class="topbarInner">
+        <div class="topbarLeft">
+          <a class="motherSiteLink" href="https://k-kowalski.github.io/" target="_blank" rel="noopener noreferrer">
+            k-kowalski.github.io
+          </a>
+        </div>
+        <nav class="nav">
+          <a href="./">Project home</a>
+          <a href="./demo.html">Live demo</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="wrap storyPage">
+      <!-- Section 1: Basic Optimization -->
+      <section class="storySection panel" id="storySec1">
+        <div class="storyHeader">
+          <div class="storyTitleBlock">
+            <p class="kicker">Section 1</p>
+            <h2>Symmetric cube to squished subdivided target</h2>
+            <p class="muted">
+              We start with a perfect cube cage and optimize it to match a squished target surface. The target is
+              procedurally generated from a deformed cube and then subdivided.
+            </p>
+          </div>
+          <div class="storyControls">
+            <div class="storyState mono" id="sec1State">Loading assets...</div>
+            <div class="storyButtonRow">
+              <button class="btn primary" id="sec1RunBtn">Run optimization</button>
+              <button class="btn" id="sec1StopBtn">Stop</button>
+              <button class="btn" id="sec1ResetBtn">Reset</button>
+            </div>
+            <div class="storyParamsGrid">
+              <label class="paramLabel">
+                <span class="paramName">LR</span>
+                <input id="sec1Lr" class="paramInput" type="number" step="0.0005" value="0.011" />
+              </label>
+              <label class="paramLabel">
+                <span class="paramName">Iterations</span>
+                <input id="sec1Iters" class="paramInput" type="number" step="10" value="100" />
+              </label>
+              <label class="paramLabel">
+                <span class="paramName">Samples</span>
+                <input id="sec1Samples" class="paramInput" type="number" step="64" value="512" />
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="storyViewerFull">
+          <canvas id="sec1Canvas"></canvas>
+        </div>
+        <div class="storyChartFull">
+          <canvas id="sec1Chart"></canvas>
+        </div>
+        <!-- Hidden elements for JS compatibility -->
+        <div class="pillRow" id="sec1Pills" style="display:none;"></div>
+        <span id="sec1Status" style="display:none;"></span>
+        <button id="sec1PrepareBtn" style="display:none;"></button>
+      </section>
+
+      <!-- Section 2: Cage Hierarchy Recovery -->
+      <section class="storySection panel" id="storySec2">
+        <div class="storyHeader">
+          <div class="storyTitleBlock">
+            <p class="kicker">Section 2</p>
+            <h2>Cage hierarchy recovery</h2>
+            <p class="muted">
+              Demonstrates multi-resolution cage fitting using <span class="mono">target1_subd2.obj</span>.
+            </p>
+          </div>
+        </div>
+
+        <!-- Stage A -->
+        <div class="stageGroup">
+          <div class="stageHeader">
+            <h3 class="stageTitle">Stage A: High-resolution fit</h3>
+            <p class="muted small">Fit a level-1 (26-vertex) cube cage to the target mesh.</p>
+          </div>
+          <div class="stageControls">
+            <div class="storyState mono" id="sec2StateA">Loading assets...</div>
+            <div class="storyButtonRow">
+              <button class="btn primary" id="sec2RunABtn">Run stage A</button>
+              <button class="btn" id="sec2StopBtn">Stop</button>
+              <button class="btn" id="sec2ResetBtn">Reset</button>
+            </div>
+            <div class="storyParamsGrid">
+              <label class="paramLabel">
+                <span class="paramName">LR</span>
+                <input id="sec2Lr" class="paramInput" type="number" step="0.0005" value="0.008" />
+              </label>
+              <label class="paramLabel">
+                <span class="paramName">Iterations</span>
+                <input id="sec2Iters" class="paramInput" type="number" step="10" value="200" />
+              </label>
+              <label class="paramLabel">
+                <span class="paramName">Samples</span>
+                <input id="sec2Samples" class="paramInput" type="number" step="64" value="768" />
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="storyViewerFull">
+          <canvas id="sec2Canvas"></canvas>
+        </div>
+
+        <div class="stageGroup stageGroupLocked" id="sec2StageBGroup">
+          <div class="stageHeader">
+            <h3 class="stageTitle">Stage B: Hierarchy recovery</h3>
+            <p class="muted small">Recover a level-0 (8-vertex) cage that subdivides to match stage A's result.</p>
+          </div>
+          <div class="stageControls">
+            <div class="storyState mono" id="sec2StateB">Complete stage A first.</div>
+            <div class="storyButtonRow">
+              <button class="btn primary" id="sec2RunBBtn" disabled>Run stage B</button>
+            </div>
+          </div>
+        </div>
+        <div class="storyChartFull">
+          <canvas id="sec2Chart"></canvas>
+        </div>
+        <!-- Hidden elements for JS compatibility -->
+        <div class="pillRow" id="sec2Pills" style="display:none;"></div>
+        <span id="sec2Status" style="display:none;"></span>
+        <span id="sec2State" style="display:none;"></span>
+        <button id="sec2PrepareABtn" style="display:none;"></button>
+        <button id="sec2PrepareBBtn" style="display:none;"></button>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="./js/demo_main.js?v=story13"></script>
+</body>
+
+</html>

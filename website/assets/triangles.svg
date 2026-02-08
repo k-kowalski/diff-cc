@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" preserveAspectRatio="none">
+  <defs>
+    <pattern id="tri" x="0" y="0" width="160" height="140" patternUnits="userSpaceOnUse">
+      <path d="M0,140 L80,0 L160,140 Z" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1" />
+      <path d="M0,0 L80,140 L160,0 Z" fill="none" stroke="rgba(130,210,255,0.14)" stroke-width="1" />
+      <path d="M0,70 L80,0 L160,70 L80,140 Z" fill="none" stroke="rgba(64,199,178,0.12)" stroke-width="1" />
+    </pattern>
+    <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.9)" />
+      <stop offset="100%" stop-color="rgba(255,255,255,0.35)" />
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#tri)" />
+  <rect width="1600" height="1000" fill="url(#fade)" opacity="0.5" />
+</svg>
+

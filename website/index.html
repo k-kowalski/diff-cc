@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description"
+    content="Differentiable Catmull-Clark subdivision and cage fitting, with a realtime browser demo." />
+  <title>Differentiable Catmull-Clark</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Manrope:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="./css/site.css" />
+</head>
+
+<body>
+  <img src="./assets/triangles.svg" alt="" class="bg-triangles" aria-hidden="true" />
+  <div class="content-wrapper">
+    <header class="topbar">
+      <div class="topbarInner">
+        <div class="topbarLeft">
+          <a class="motherSiteLink" href="https://k-kowalski.github.io/" target="_blank" rel="noopener noreferrer">
+            k-kowalski.github.io
+          </a>
+        </div>
+        <nav class="nav">
+          <a href="./">Project home</a>
+          <a href="./demo.html">Live demo</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <p class="kicker fade-in">Geometry processing | Differentiable graphics | Tooling</p>
+      <section class="hero">
+        <div class="heroIntro">
+          <h1>Differentiable Catmull-Clark</h1>
+          <br />
+          <h2>Optimize subdivision cages with gradients.</h2>
+          <p class="lede fade-in">
+            This project turns Catmull-Clark subdivision into a differentiable layer and uses it to fit a coarse
+            control cage so that its subdivided surface matches a target mesh.
+          </p>
+          <div class="ctaRow fade-in">
+            <a class="btn primary" href="./demo.html">Open realtime demo</a>
+          </div>
+        </div>
+      </section>
+
+      <section id="catmull" class="panel">
+        <h2>What Catmull-Clark does</h2>
+        <div class="ccIntroText">
+          <p class="muted">
+            Catmull-Clark (CC) converts a coarse control mesh into a smoother, denser quad mesh. Each iteration
+            computes new points from local weighted averages while keeping connectivity fixed.
+          </p>
+          <p class="muted">
+            CC is widely used across industry for both modeling and rendering pipelines in film, VFX, animation, and
+            games. It is a production-standard subdivision workflow in DCC tools, and Pixar maintains OpenSubdiv, the
+            widely adopted open-source implementation used in many pipelines.
+          </p>
+
+          <p class="muted small wikiRefInline">
+            <a class="wikiRefInlineLink" href="https://en.wikipedia.org/wiki/Catmull%E2%80%93Clark_subdivision_surface"
+              target="_blank" rel="noopener noreferrer">Catmull-Clark subdivision surface (Wikipedia)</a>
+          </p>
+          <p class="muted small wikiRefInline">
+            <a class="wikiRefInlineLink" href="https://www.opensubdiv.org/docs/intro.html" target="_blank"
+              rel="noopener noreferrer">OpenSubdiv documentation</a>
+          </p>
+        </div>
+      </section>
+
+      <section id="why-differentiable" class="panel">
+        <h2>Why make Catmull-Clark differentiable</h2>
+        <p class="muted">
+          In production, cage fitting is an inverse problem. Teams often start from one of these shape sources:
+        </p>
+        <ul class="bullets">
+          <li>Scan data</li>
+          <li>Sculpted geometry</li>
+          <li>Simulation output</li>
+          <li>Design-intent reference meshes or sketches</li>
+        </ul>
+        <br />
+        <p class="muted">
+          They then need a compact control cage that reproduces the target after subdivision. A
+          differentiable CC operator gives direct gradients from surface mismatch back to cage vertices, so this step
+          can be optimized automatically instead of tuned manually.
+        </p>
+        <br />
+        <p class="muted">Industry value is practical:</p>
+        <ol class="steps industryValueList">
+          <li><b>Faster turnarounds</b>: less manual cage tweaking to hit target shapes.</li>
+          <li><b>Surface reconstruction</b>: cages can be optimized to match target shapes.</li>
+          <li><b>Pipeline compatibility</b>: integration with optimization & Machine Learning workflows in DCC, CAD,
+            VFX, and
+            games.</li>
+          <li><b>Novel workflows</b>: recovery of the whole subdivision hierarchy of cages, multi-resolution modeling,
+            etc.</li>
+        </ol>
+      </section>
+
+      <section id="how" class="panel">
+        <h2>Technical overview</h2>
+        <ol class="steps">
+          <li>
+            <b>Input</b>: a cage mesh (usually coarse, mostly quads) and a target surface mesh (any topology).
+          </li>
+          <li>
+            <b>Forward</b>: apply <span class="mono">k</span> levels of Catmull-Clark subdivision to the cage to
+            produce a smooth surface.
+          </li>
+          <li>
+            <b>Match</b>: sample points on both surfaces and compute a nearest-neighbor loss (symmetric Chamfer).
+            <p class="muted small whySamplesHighlight">
+              <span class="whySamplesTag">Why samples?</span> Target and subdivided meshes do not share topology, so we
+              match <i>surfaces</i>, not vertex
+              indices.
+            </p>
+          </li>
+          <li>
+            <b>Regularize</b>: add terms that keep the cage well-shaped (smoothness, edge-length, anchors).
+          </li>
+          <li>
+            <b>Differentiate</b>: Backpropagate through the entire pipeline to update cage vertices.
+          </li>
+        </ol>
+      </section>
+
+
+
+      <section class="panel">
+        <h2>Optimization pipeline</h2>
+        <div class="mermaid mermaidFlow">
+          flowchart LR
+          C0[Cage verts C] --> CC[Catmull-Clark subdivide]
+          CC --> M[(Subdivided mesh)]
+          M --> S1[Sample points P]
+          T[(Target mesh)] --> S2["Sample points Q"]
+          S1 --> K[Nearest neighbors]
+          S2 --> K
+          K --> L[Loss terms]
+          L --> G[Backprop dL/dC]
+          G --> OPT[Optimizer step]
+          OPT --> C0
+
+          classDef param fill:#335dff,stroke:#1f3dbf,color:#ffffff;
+          classDef mesh fill:#5bc0ff,stroke:#335dff,color:#0b1020;
+          classDef geom fill:#7affc1,stroke:#3fbf8f,color:#0b1020;
+          classDef match fill:#ffd166,stroke:#bf9a2a,color:#0b1020;
+          classDef loss fill:#ff7aa2,stroke:#bf3f5f,color:#0b1020;
+          class C0 param;
+          class CC geom;
+          class M,T mesh;
+          class S1,S2,K,OPT match;
+          class L,G loss;
+        </div>
+        <p class="muted small">The live demo runs this end-to-end in the browser with TensorFlow.js autodiff.</p>
+      </section>
+
+      <section id="loss-breakdown" class="panel">
+        <h2>Loss breakdown</h2>
+        <p class="muted">
+          The objective combines data terms with cage priors. This is essential because reverse subdivision is
+          underconstrained: different cages can produce very similar subdivided surfaces.
+        </p>
+        <br />
+        <div class="grid2">
+          <div class="panel">
+            <h3>Data terms</h3>
+            <ul class="bullets">
+              <li><span class="mono">Symmetric Chamfer</span>: nearest-neighbor distance in both directions.
+              </li>
+              <li><span class="mono">Point-to-plane</span> (optional): penalizes displacement along target normals.</li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h3>Regularizers</h3>
+            <ul class="bullets">
+              <li><span class="mono">Laplacian smoothing</span>: suppresses high-frequency cage noise.</li>
+              <li><span class="mono">Edge-length preservation</span>: discourages collapse and degenerate edges.</li>
+              <li><span class="mono">Anchor-to-init</span>: biases solutions toward plausible cages.</li>
+            </ul>
+          </div>
+        </div>
+
+      </section>
+
+      <section id="sampling" class="panel">
+        <h2>Sampling</h2>
+        <p class="muted">
+          Surface matching is sample-based because target and subdivided meshes usually do not share topology or vertex
+          correspondence.
+        </p>
+        <ul class="bullets">
+          <li><b>Sampling</b>: area-weighted triangle choice, then barycentric point sampling.</li>
+          <li><b>Optimal transport</b>: For large assets, consider swapping this with a dedicated KNN library like FAISS
+            or PyTorch3D.</li>
+        </ul>
+      </section>
+
+      <section id="largesteps" class="panel">
+        <h2>LargeSteps support</h2>
+        <p class="muted">
+          LargeSteps enables differential parameterization of cage vertices. In practice this acts like a
+          preconditioner:
+          larger smooth moves become easier and high-frequency jitter is reduced.
+        </p>
+        <br />
+        <p class="muted small">
+          Useful when raw XYZ optimization oscillates, stalls, or requires very small learning rates.
+        </p>
+        <br />
+        <p class="muted small wikiRefInline">
+          <a class="wikiRefInlineLink" href="https://pypi.org/project/largesteps/" target="_blank"
+            rel="noopener noreferrer">LargeSteps (PyPI)</a>
+        </p>
+      </section>
+
+
+      <section class="panel">
+        <h2>Practical note on cage hierarchy recovery</h2>
+        <p class="muted">
+          Recovering a lower-resolution cage from a higher-resolution optimized cage can plateau at non-zero error:
+          Catmull-Clark is not invertible, and coarse cages have fewer degrees of freedom.
+        </p>
+      </section>
+
+
+      <footer class="footer">
+      </footer>
+    </main>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    (function () {
+      if (!window.mermaid) return;
+      const isLight = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: "base",
+        themeVariables: isLight
+          ? {
+            fontFamily: "Manrope, Segoe UI, Arial, sans-serif",
+            background: "#f7f8fb",
+            primaryColor: "#dbe6ff",
+            primaryBorderColor: "#335dff",
+            primaryTextColor: "#0b1020",
+            secondaryColor: "#d3fff1",
+            secondaryBorderColor: "#3fbf8f",
+            secondaryTextColor: "#0b1020",
+            tertiaryColor: "#ffe6ef",
+            tertiaryBorderColor: "#bf3f5f",
+            tertiaryTextColor: "#0b1020",
+            lineColor: "#335dff",
+            textColor: "#0b1020",
+          }
+          : {
+            fontFamily: "Manrope, Segoe UI, Arial, sans-serif",
+            background: "#0b1020",
+            primaryColor: "#1b2a55",
+            primaryBorderColor: "#7aa2ff",
+            primaryTextColor: "#eaf0ff",
+            secondaryColor: "#0f3a2d",
+            secondaryBorderColor: "#7affc1",
+            secondaryTextColor: "#eafff7",
+            tertiaryColor: "#3a1020",
+            tertiaryBorderColor: "#ff7aa2",
+            tertiaryTextColor: "#ffeaf1",
+            lineColor: "#7aa2ff",
+            textColor: "#eaf0ff",
+          },
+        flowchart: {
+          curve: "basis",
+          nodeSpacing: 60,
+          rankSpacing: 70,
+          padding: 12,
+        },
+      });
+
+      try {
+        if (mermaid.run) {
+          mermaid.run({ nodes: document.querySelectorAll(".mermaid") });
+        } else if (mermaid.init) {
+          mermaid.init(undefined, document.querySelectorAll(".mermaid"));
+        }
+      } catch (err) {
+        console.warn("Mermaid render failed", err);
+      }
+    })();
+  </script>
+</body>
+
+</html>
