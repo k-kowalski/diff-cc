@@ -609,7 +609,7 @@ code {
 }
 
 .storyState {
-  margin-top: var(--space-2);
+  margin-top: 0;
   padding: var(--space-3);
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
@@ -696,6 +696,20 @@ code {
   padding: var(--space-6);
 }
 
+#storySec2 {
+  gap: var(--space-2);
+}
+
+#storySec2 .storyHeader {
+  gap: var(--space-2);
+}
+
+#storySec2 .storyTitleBlock {
+  flex: 1 1 100%;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
 .storyHeader {
   display: flex;
   flex-wrap: wrap;
@@ -714,6 +728,7 @@ code {
 
 .storyTitleBlock p.muted {
   max-width: 60ch;
+  margin: 0;
 }
 
 .storyControls {
@@ -732,6 +747,39 @@ code {
   flex: 1 1 100%;
   min-width: 0;
   width: 100%;
+  padding: var(--space-2);
+  gap: var(--space-1);
+}
+
+#storySec1 .storyHeader {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+
+#storySec1 .storyTitleBlock {
+  margin-bottom: 0;
+}
+
+#storySec1 .storyTitleBlock h2 {
+  margin-bottom: var(--space-1);
+}
+
+#storySec1 .storyControls .storyState {
+  order: 1;
+  margin-top: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#storySec1 .storyControls .storyButtonRow {
+  order: 2;
+}
+
+#storySec1 .storyControls .paramFold {
+  order: 3;
+  margin-top: 0;
 }
 
 .storyButtonRow {
@@ -758,7 +806,7 @@ code {
   padding: var(--space-2);
 }
 
-.paramFold > summary {
+.paramFold>summary {
   cursor: pointer;
   user-select: none;
   color: var(--color-text-secondary);
@@ -766,7 +814,7 @@ code {
   letter-spacing: 0.01em;
 }
 
-.paramFold > .storyParamsGrid {
+.paramFold>.storyParamsGrid {
   margin-top: var(--space-3);
 }
 
@@ -886,6 +934,40 @@ code {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+#storySec2 .stageControls {
+  gap: var(--space-1);
+}
+
+#storySec2 .stageHeader {
+  margin-bottom: 0;
+}
+
+#storySec2 .stageGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+#storySec2 .stageControls .storyState {
+  order: 1;
+  margin-top: 0;
+  display: flex;
+  align-items: center;
+  min-height: 2.2rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#storySec2 .stageControls .storyButtonRow {
+  order: 2;
+}
+
+#storySec2 .stageControls .paramFold {
+  order: 3;
+  margin-top: 0;
 }
 
 .stageDivider {
@@ -1035,10 +1117,6 @@ code {
   .storyControls {
     width: 100%;
   }
-
-  #storySec1 .storyHeader {
-    gap: var(--space-1);
-  }
 }
 
 @media (max-width: 760px) {
@@ -1077,27 +1155,4 @@ code {
     padding: var(--space-5);
   }
 
-  #storySec1 .storyHeader {
-    gap: 0.15rem;
-  }
-
-  #storySec1 .storyControls {
-    padding: var(--space-2);
-    gap: var(--space-1);
-  }
-
-  #storySec1 .storyControls .storyButtonRow {
-    order: 1;
-    margin-top: 0;
-  }
-
-  #storySec1 .storyControls .storyState {
-    order: 2;
-    margin-top: 0;
-  }
-
-  #storySec1 .storyControls .paramFold {
-    order: 3;
-    margin-top: 0;
-  }
 }
