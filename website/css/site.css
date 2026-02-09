@@ -1076,4 +1076,28 @@ code {
   .panel {
     padding: var(--space-5);
   }
+
+  #storySec1 .storyHeader {
+    gap: 0.15rem;
+  }
+
+  #storySec1 .storyControls {
+    padding: var(--space-2);
+    gap: var(--space-1);
+  }
+
+  #storySec1 .storyControls .storyButtonRow {
+    order: 1;
+    margin-top: 0;
+  }
+
+  #storySec1 .storyControls .storyState {
+    order: 2;
+    margin-top: 0;
+  }
+
+  #storySec1 .storyControls .paramFold {
+    order: 3;
+    margin-top: 0;
+  }
 }
